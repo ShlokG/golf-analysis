@@ -1,0 +1,194 @@
+---
+title: "Golf_Analysis"
+author: "Shlok Goyal"
+date: "March 23, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, include = F}
+# Dummy Data
+names = c("Random", "Mario", "Luigi", "Tiger", "Kuchar", "Ochoa", "Rory", "Dustin", "Fowler", "Phil")
+fairway = c("Hit", "Missed - Left", "Missed - Right", "Not Applicable (Par 3)")
+greens = c("Fatside Hit", "Fatside Miss", "Skinny Side Hit", "Skinny Side Miss")
+approach = c("Less than 50 yards", "51-75 yards","76-100 yards","101-125 yards","126-150 yards",
+             "151-175 yards","176-200 yards","201-225 yards")
+penalt = c("OB", "Unplayable", "Red Playable Area", "Yellow Penalty Area", "No Penalty Shot")
+
+n = 1000
+
+df = data.frame(Player = sample(names, n, replace = T), Score = sample(seq(2,6),n,replace = T), Par = sample(seq(3,5),n,replace=T), 
+                Fairway_Hit = sample(fairway,n,replace=T), 
+                Green_Hit = sample(greens,n,replace=T), Approach_Dist = sample(approach,n,replace=T), 
+                Putts = sample(seq(1,3),n,replace=T), First_Putt = sample(seq(2,30,by=.5),n,replace=T), 
+                Penalty_Shot = sample(penalt,n,replace=T))
+
+# When Actually Using this, Read in the Data and remove above
+
+df$Player = as.character(df$Player)
+df$Score = as.numeric(df$Score)
+df$Par = as.numeric(df$Par)
+df$Fairway_Hit = as.character(df$Fairway_Hit)
+df$Green_Hit = as.character(df$Green_Hit)
+df$Approach_Dist = as.character(df$Approach_Dist)
+df$Putts = as.numeric(df$Putts)
+df$First_Putt = as.numeric(df$First_Putt)
+df$Penalty_Shot = as.character(df$Penalty_Shot)
+
+df2 = df
+
+# Loading in library
+library(dplyr)
+
+
+df_grouped = df2 %>%
+  group_by(Player) %>%
+  # Green Hit %
+  mutate(Green_Hit_Percent = length(Green_Hit[grepl("Hit", Green_Hit)]) / length(Green_Hit)) %>%
+  ## % of All Misses on Fat Side (The corresponding % of misses on skinny is just 1 minus this #)
+  mutate(Green_Fat_Miss = length(Green_Hit[grepl("Fatside Miss", Green_Hit)]) / length(Green_Hit[grepl("Miss", Green_Hit)])) %>%
+  ## % of All Hits on the Fat side (corresponding % of hits on skinny is just 1 minus this #)
+  mutate(Green_Fat_Hit = length(Green_Hit[grepl("Fatside Hit", Green_Hit)]) / length(Green_Hit[grepl("Hit", Green_Hit)])) %>%
+  
+  # Breaking Green Hit % By Approach Distance to Green (GHP is Green Hit %) at 75-yd intervals
+  mutate(GHP_Less_75 = length(Green_Hit[grepl("Hit", Green_Hit) & 
+                                          (grepl("Less than", Approach_Dist) | Approach_Dist == "51-75 yards")]) / 
+           length(Green_Hit[grepl("Less than", Approach_Dist) | Approach_Dist == "51-75 yards"])) %>%
+  
+  mutate(GHP_76_150 = length(Green_Hit[grepl("Hit", Green_Hit) & 
+                                          (grepl("101-125", Approach_Dist) | Approach_Dist == "76-100 yards" | grepl("126-150", Approach_Dist))]) / 
+           length(Green_Hit[grepl("101-125", Approach_Dist) | Approach_Dist == "76-100 yards" | Approach_Dist == "126-150 yards"])) %>%
+  
+  mutate(GHP_151_225 = length(Green_Hit[grepl("Hit", Green_Hit) & 
+                                         (grepl("151-175", Approach_Dist) | grepl("176-200", Approach_Dist) | grepl("201-225", Approach_Dist))]) / 
+           length(Green_Hit[grepl("151-175", Approach_Dist) | grepl("176-200", Approach_Dist) | grepl("201-225", Approach_Dist)])) %>%
+  
+  mutate(GHP_Greater_225 = length(Green_Hit[grepl("Hit", Green_Hit) & grepl("+", Approach_Dist)]) / 
+           length(Green_Hit[grepl("+", Approach_Dist)])) %>%
+  
+  # Green Hit % by Par
+  mutate(Green_Hit_Par3 = length(Green_Hit[grepl("Hit", Green_Hit) & Par == 3]) / length(Green_Hit[Par==3])) %>%
+  
+  mutate(Green_Hit_Par4 = length(Green_Hit[grepl("Hit", Green_Hit) & Par == 4]) / length(Green_Hit[Par==4])) %>%
+  
+  mutate(Green_Hit_Par5 = length(Green_Hit[grepl("Hit", Green_Hit) & Par == 5]) / length(Green_Hit[Par==5])) %>%
+  
+  # Fairway Hit %
+  mutate(Fairway_Hit_Percent = length(Fairway_Hit[grepl("Hit", Fairway_Hit)]) / 
+           length(Fairway_Hit[!grepl("Not Applicable", Fairway_Hit)])) %>%
+  ## % of All Fairway Misses to Left (Corresponding % of misses to right is just 1 minus this #)
+  mutate(Fairway_Miss_Left = length(Fairway_Hit[grepl("Missed - Left", Fairway_Hit)]) / 
+           length(Fairway_Hit[!grepl("Not Applicable", Fairway_Hit)])) %>%
+  
+  # Number of Penalties
+  mutate(Penalties = length(Penalty_Shot[Penalty_Shot != "No Penalty Shot"])) %>%
+  
+  # Average # of Putts
+  mutate(Avg_Putts = mean(Putts)) %>%
+  
+  # Number of Holes
+  mutate(Holes = length(Green_Hit)) %>%
+  
+  # Results
+  summarize(Green_Hit_Percent = mean(Green_Hit_Percent), Green_Fat_Miss = mean(Green_Fat_Miss),
+            Green_Fat_Hit = mean(Green_Fat_Hit), GHP_Less_75 = mean(GHP_Less_75), GHP_76_150 = mean(GHP_76_150),
+            GHP_151_225 = mean(GHP_151_225), GHP_Greater_225 = mean(GHP_Greater_225), Green_Hit_Par3 = mean(Green_Hit_Par3),
+            Green_Hit_Par4 = mean(Green_Hit_Par4), Green_Hit_Par5 = mean(Green_Hit_Par5), Fairway_Hit_Percent = mean(Fairway_Hit_Percent),
+            Fairway_Miss_Left = mean(Fairway_Miss_Left), Penalties = mean(Penalties), Avg_Putts = mean(Avg_Putts),
+            Holes = mean(Holes))
+
+
+
+#############################################
+### Getting Strokes Gained for each Shot ####
+#############################################
+
+# Reading in PGA Tour Data
+library(readxl)
+putt_dt = read_excel("Putt_Lengths.xlsx", sheet = "Putts")
+approach_dt = read_excel("Putt_Lengths.xlsx", sheet = "Approach")
+
+# Strokes Gained for Putts
+## Relative to Tour Golfer
+putt_ind = c()
+for (i in 1:length(df2$First_Putt)){
+  putt_ind = c(putt_ind, which.min(abs(df2$First_Putt[i] - putt_dt$Putt_Length)))
+}
+
+df2$putt_sg = putt_dt$Putts[putt_ind] - df2$Putts
+
+# SG for Putts by Player
+sg_putt_player = df2 %>%
+  group_by(Player) %>%
+  # Putting SG
+  summarize(Putts_SG = mean(putt_sg))
+
+# Strokes Gained off the Tee
+## Using the Par as Average in PGA
+## Approach Distance only Available for Par 4 and 5
+## Assuming that Appraoch reached in one shot on par 4 and in two on par 5.
+## Using Putt Distance for Par 3
+
+# First, consider case of par 3:
+## Assuming putting begins in second shot:
+## Relative to par:
+df2$tee_sg = 2 - putt_dt$Putts[putt_ind]
+
+# Now, consider par 4 and par 5 case:
+df2$Approaches = ifelse(df2$Approach_Dist == "Less than 50 yards", 25,
+                        ifelse(df2$Approach_Dist == "51-75 yards",62.5,
+                               ifelse(df2$Approach_Dist == "76-100 yards",87.5,
+                                      ifelse(df2$Approach_Dist == "101-125 yards",112.5,
+                                             ifelse(df2$Approach_Dist == "126-150 yards", 137.5,
+                                                    ifelse(df2$Approach_Dist == "151-175 yards",162.5,
+                                                           ifelse(df2$Approach_Dist == "176-200 yards", 187.5,
+                                                                  ifelse(df2$Approach_Dist == "201-225 yards",212.5,
+                                                                         262.5))))))))
+
+tee_ind = c()
+for (i in 1:length(df2$Approaches)){
+  tee_ind = c(tee_ind, which.min(abs(df2$Approaches[i] - approach_dt$Approach_Dist)))
+  if(df2$Par[i] != 3){
+    df2$tee_sg[i] = 3 - approach_dt$Strokes[tee_ind[i]]
+  }
+}
+
+# Strokes Gained on Approach Shot
+df2$Approach_SG = df2$Par - df2$Score - df2$putt_sg - df2$tee_sg
+
+# SG till Approach by Player
+sg_player = df2 %>%
+  group_by(Player) %>%
+  # Putting SG
+  summarize(Putts_SG = mean(putt_sg), Pre_Approach_SG = mean(tee_sg), Approach_SG = mean(Approach_SG))
+
+```
+
+We ran the calculations for 10 random players with randomly-generated holes. Note that you might find some patterns in the below tables (like positive Strokes Gained for shots before Approaching the Green). Ignore those. This data was entirely randomly generated and as such reflects some skew in data collection (for example, there are more low values for Approach Distance to Green than higher ones). The larger point is: this is just for illustration as to the results the calculations can generate.
+
+We first show the average Strokes Gained from putting and from the shots until the approach shot for each player. This assumes that we go directly to putting after the first shot for a par 3 hole, for a par 4 hole, the second shot is the approach shot, and for a par 5 hole, the third shot is the approach shot.
+
+```{r, echo = T}
+sg_player
+```
+
+We next show a variety of statistics. Green\_Hit\_Percent is the percent of initial shots intended for the green that land on the green. Green\_Fat\_Miss is the percentage of misses that are on the fat side to see if a player is consistently missing on one side over another. Green\_Fat\_Hit is the percentage of hits that are on the fat side. 
+
+GHP\_Less\_75 is the percentage of approach shots from a distance less than 75 yards that hit the green. GHP\_76\_150 is the percentage of approach shots from a distance between 76 and 150 yards that hit the green. GHP\_Greater\_151\_225 is the percentage of approach shots from a distance between 151 and 225 yards that hit the green, and GHP\_Greater\_225 is the percentage of approach shots from a distance greater than 225 yards that hit the green.
+
+Green\_Hit\_Par3 is the percentage of par 3 holes in which the golfer directly hits the green. Green\_Hit\_Par4 is the percentage of par 4 holes in which the golfer hits the green on the approach. Green\_Hit\_Par5 is the percentage of par 5 holes in which the golfer hits the green on the approach.
+
+Fairway\_Hit\_Percent is the percentage of off-the-tee shots that land on the fairway. Fairway\_Miss\_Left is the percentage of off-the-tee misses that miss left (to see if a golfer consistently pulls the ball in one direction too much). Penalties is the total number of penalties accured by the player. Avg_Putts is the average number of putts per hole. Holes is the total number of holes played.
+
+```{r, eho = T}
+df_grouped[,1:5]
+df_grouped[,c(1,6:9)]
+df_grouped[,c(1,10:13)]
+df_grouped[,c(1,14:16)]
+```
+
